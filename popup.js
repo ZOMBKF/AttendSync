@@ -4,35 +4,74 @@ const fillButton = document.getElementById("fill");
 const clearDataButton = document.getElementById("clearData");
 const statusEl = document.getElementById("status");
 
-// UPDATE CLEAR BUTTON BASED ON SAVED DATA
+const DATA_KEYS = ["attendanceMap", "attendanceSavedAt"];
+const FIVE_MINUTES = 5 * 60 * 1000;
 
+// Show generic errors without revealing student information.
+function showError(message) {
+    statusEl.textContent = `Error: ${message}`;
+}
+
+// Check whether saved attendance data has expired.
+async function getSavedAttendance() {
+    const data = await chrome.storage.session.get(DATA_KEYS);
+
+    if (
+        data.attendanceMap &&
+        (
+            !data.attendanceSavedAt ||
+            Date.now() - data.attendanceSavedAt >= FIVE_MINUTES
+        )
+    ) {
+        await chrome.storage.session.remove(DATA_KEYS);
+        return {};
+    }
+
+    return data;
+}
+
+// Update the Clear button based on stored data.
 async function updateClearButton() {
     try {
-        const { attendanceMap } = await chrome.storage.local.get(
-            "attendanceMap"
-        );
+        const { attendanceMap } = await getSavedAttendance();
 
-        const hasData =
+        clearDataButton.disabled = !(
             attendanceMap &&
-            Object.keys(attendanceMap).length > 0;
-
-        clearDataButton.disabled = !hasData;
-
-    } catch (error) {
+            Object.keys(attendanceMap).length > 0
+        );
+    } catch {
         clearDataButton.disabled = true;
-        console.error("Could not check saved data:", error);
     }
 }
 
-// Check saved data when the popup first opens.
-clearDataButton.disabled = true;
-updateClearButton();
+// Remove any records left in the old local storage.
+async function initialisePrivacy() {
+    extractButton.disabled = true;
+    fillButton.disabled = true;
+    clearDataButton.disabled = true;
 
-// Keep the button updated if storage changes.
+    try {
+        await chrome.storage.local.remove(DATA_KEYS);
+        await updateClearButton();
+    } catch {
+        showError("Could not initialise secure storage.");
+        return;
+    } finally {
+        extractButton.disabled = false;
+        fillButton.disabled = false;
+    }
+}
+
+initialisePrivacy();
+
+// Keep button state updated when session data changes.
 chrome.storage.onChanged.addListener((changes, areaName) => {
     if (
-        areaName === "local" &&
-        ("attendanceMap" in changes)
+        areaName === "session" &&
+        (
+            "attendanceMap" in changes ||
+            "attendanceSavedAt" in changes
+        )
     ) {
         updateClearButton();
     }
@@ -46,13 +85,8 @@ extractButton.addEventListener("click", async () => {
     try {
         statusEl.textContent = "Extracting attendance...";
 
-        // Clear old data before starting a new extraction.
-        await chrome.storage.local.remove([
-            "attendanceMap",
-            "attendanceSavedAt"
-        ]);
-
-        await updateClearButton();
+        // Delete any previously saved attendance.
+        await chrome.storage.session.remove(DATA_KEYS);
 
         const [tab] = await chrome.tabs.query({
             active: true,
@@ -60,7 +94,7 @@ extractButton.addEventListener("click", async () => {
         });
 
         if (!tab?.id) {
-            throw new Error("No active tab found.");
+            throw new Error("No active tab.");
         }
 
         const results = await chrome.scripting.executeScript({
@@ -71,37 +105,27 @@ extractButton.addEventListener("click", async () => {
         const result = results[0]?.result;
 
         if (!result?.success || !result.count) {
-            throw new Error(
-                result?.message || "No attendance records found."
-            );
+            throw new Error("Attendance extraction failed.");
         }
 
-        await chrome.storage.local.set({
+        await chrome.storage.session.set({
             attendanceMap: result.attendanceMap,
             attendanceSavedAt: Date.now()
         });
 
-        await updateClearButton();
-
         statusEl.textContent =
             `Successfully extracted ${result.count} students!`;
 
-    } catch (error) {
-        // Prevent old data from being used after failure.
+    } catch {
         try {
-            await chrome.storage.local.remove([
-                "attendanceMap",
-                "attendanceSavedAt"
-            ]);
-        } catch (storageError) {
-            console.error(
-                "Failed to clear saved data:",
-                storageError
-            );
+            await chrome.storage.session.remove(DATA_KEYS);
+        } catch {
+            // Do not log student information.
         }
 
-        statusEl.textContent = `Error: ${error.message}`;
-        console.error(error);
+        showError(
+            "Could not extract attendance. Check the page and try again."
+        );
 
     } finally {
         extractButton.disabled = false;
@@ -117,29 +141,13 @@ fillButton.addEventListener("click", async () => {
     try {
         statusEl.textContent = "Filling GPA attendance...";
 
-        const { attendanceMap, attendanceSavedAt } =
-            await chrome.storage.local.get([
-                "attendanceMap",
-                "attendanceSavedAt"
-            ]);
+        const { attendanceMap } = await getSavedAttendance();
 
         if (
             !attendanceMap ||
             !Object.keys(attendanceMap).length
         ) {
-            throw new Error(
-                "Please extract attendance first."
-            );
-        }
-
-        if (
-            !attendanceSavedAt ||
-            Date.now() - attendanceSavedAt >
-            24 * 60 * 60 * 1000
-        ) {
-            throw new Error(
-                "Attendance data is old. Please extract it again."
-            );
+            throw new Error("No saved attendance.");
         }
 
         const [tab] = await chrome.tabs.query({
@@ -148,16 +156,14 @@ fillButton.addEventListener("click", async () => {
         });
 
         if (!tab?.id) {
-            throw new Error("No active GPA tab found.");
+            throw new Error("No active GPA tab.");
         }
 
-        // Load the GPA processing function.
         await chrome.scripting.executeScript({
             target: { tabId: tab.id },
             files: ["gpa.js"]
         });
 
-        // Fill automatically without confirmation.
         const results = await chrome.scripting.executeScript({
             target: { tabId: tab.id },
 
@@ -167,11 +173,10 @@ fillButton.addEventListener("click", async () => {
                 ) {
                     return {
                         success: false,
-                        message: "GPA function is not loaded."
+                        message: "GPA function unavailable."
                     };
                 }
 
-                // Check proposed changes before applying.
                 const preview = processGpaAttendance(
                     data,
                     false
@@ -180,11 +185,10 @@ fillButton.addEventListener("click", async () => {
                 if (!preview.success || !preview.matched) {
                     return {
                         success: false,
-                        message: "No matching GPA fields found."
+                        message: "GPA validation failed."
                     };
                 }
 
-                // Apply validated changes immediately.
                 return processGpaAttendance(
                     data,
                     true,
@@ -198,24 +202,25 @@ fillButton.addEventListener("click", async () => {
         const result = results[0]?.result;
 
         if (!result?.success || !result.applied) {
-            throw new Error(
-                result?.message ||
-                "Unable to fill GPA attendance."
-            );
+            throw new Error("GPA autofill failed.");
         }
+
+        // Delete saved records after successful autofill.
+        await chrome.storage.session.remove(DATA_KEYS);
 
         statusEl.textContent =
             `Filled ${result.applied} students! ` +
-            `${result.skipped ?? 0} skipped.`;
+            `${result.skipped ?? 0} skipped. ` +
+            "Saved attendance data deleted.";
 
-    } catch (error) {
-        statusEl.textContent =
-            `Error: ${error.message}`;
-
-        console.error(error);
+    } catch {
+        showError(
+            "Could not complete GPA autofill. Check the page and try again."
+        );
 
     } finally {
         fillButton.disabled = false;
+        await updateClearButton();
     }
 });
 
@@ -225,19 +230,13 @@ clearDataButton.addEventListener("click", async () => {
     clearDataButton.disabled = true;
 
     try {
-        await chrome.storage.local.remove([
-            "attendanceMap",
-            "attendanceSavedAt"
-        ]);
+        await chrome.storage.session.remove(DATA_KEYS);
 
         statusEl.textContent =
             "Saved attendance data cleared successfully!";
 
-    } catch (error) {
-        statusEl.textContent =
-            `Error: ${error.message}`;
-
-        console.error(error);
+    } catch {
+        showError("Could not clear saved data.");
 
     } finally {
         await updateClearButton();
