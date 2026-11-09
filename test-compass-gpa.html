@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Compass GPA Report - Test</title>
+
+    <style>
+        body {
+            margin: 0;
+            font-family: Arial, sans-serif;
+            background: #f2f4f7;
+            color: #333;
+        }
+
+        header {
+            background: #263d59;
+            color: white;
+            padding: 18px 30px;
+            font-size: 20px;
+            font-weight: bold;
+        }
+
+        main {
+            margin: 30px;
+            background: white;
+            padding: 25px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+
+        h2 {
+            margin-top: 0;
+        }
+
+        .description {
+            color: #666;
+            font-size: 13px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+            font-size: 13px;
+        }
+
+        th,
+        td {
+            border: 1px solid #ddd;
+            padding: 12px;
+            text-align: left;
+        }
+
+        th {
+            background: #e6e9ed;
+        }
+
+        tr:nth-child(even) {
+            background: #fafafa;
+        }
+
+        select {
+            width: 140px;
+            padding: 8px;
+            border: 1px solid #aaa;
+            border-radius: 4px;
+            background: white;
+        }
+
+        .notice {
+            margin-top: 20px;
+            padding: 12px;
+            background: #eef6ff;
+            border-left: 4px solid #3976c8;
+            font-size: 13px;
+        }
+
+        .score {
+            font-weight: bold;
+            color: #2563eb;
+        }
+    </style>
+</head>
+
+<body>
+    <header>Compass — GPA Reporting (Test)</header>
+
+    <main>
+        <h2>Student GPA Report</h2>
+
+        <p class="description">
+            Local test page with fictional students.
+            Not connected to the real Compass system.
+        </p>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>Student</th>
+                    <th>Attendance</th>
+                    <th>GPA Score</th>
+                </tr>
+            </thead>
+
+            <tbody id="gpaRows"></tbody>
+        </table>
+
+        <div class="notice">
+            <strong>Instructions:</strong>
+            Use AttendSync to preview and fill the attendance
+            dropdowns. Changes are only made on this local page.
+        </div>
+    </main>
+
+    <script>
+        const students = [
+            ["ABC0001", "Student A"],
+            ["DEF0002", "Student B"],
+            ["GHI0003", "Student C"],
+            ["JKL0004", "Student D"],
+            ["MNO0005", "Student E"],
+            ["PQR0006", "Student F"],
+            ["STU0007", "Student G"],
+            ["VWX0008", "Student H"],
+            ["YZA0009", "Student I"],
+            ["BCD0010", "Student J"]
+        ];
+
+        const bands = [
+            ["95-100", 5],
+            ["85-94", 4],
+            ["75-84", 3],
+            ["65-74", 2],
+            ["55-64", 1],
+            ["<54", 0]
+        ];
+
+        const tbody = document.getElementById("gpaRows");
+
+        for (const [id, name] of students) {
+            const row = document.createElement("tr");
+            row.className =
+                tbody.children.length % 2 === 0 ? "even" : "odd";
+
+            const nameCell = document.createElement("td");
+            nameCell.className = "gpa_subject";
+            nameCell.textContent = `${name} (${id})`;
+
+            const attendanceCell = document.createElement("td");
+            attendanceCell.className = "gpa_normal";
+
+            const select = document.createElement("select");
+            select.setAttribute("aria-label", `Attendance for ${id}`);
+
+            const placeholder = document.createElement("option");
+            placeholder.value = "";
+            placeholder.textContent = "Select attendance";
+            select.appendChild(placeholder);
+
+            for (const [label, score] of bands) {
+                const option = document.createElement("option");
+                option.value = String(score);
+                option.textContent = label;
+                select.appendChild(option);
+            }
+
+            const na = document.createElement("option");
+            na.value = "na";
+            na.textContent = "n/a";
+            select.appendChild(na);
+
+            attendanceCell.appendChild(select);
+
+            const scoreCell = document.createElement("td");
+            scoreCell.className = "score";
+            scoreCell.textContent = "-";
+
+            select.addEventListener("change", () => {
+                scoreCell.textContent = select.value || "-";
+            });
+
+            row.appendChild(nameCell);
+            row.appendChild(attendanceCell);
+            row.appendChild(scoreCell);
+
+            tbody.appendChild(row);
+        }
+    </script>
+</body>
+
+</html>
