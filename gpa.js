@@ -1,12 +1,12 @@
 
 function processGpaAttendance(attendanceMap, applyChanges = false, approvedChanges = []) {
     const attendanceBands = [
-        { min: 95, label: /^95-100/ },
-        { min: 85, label: /^85-94/ },
-        { min: 75, label: /^75-84/ },
-        { min: 65, label: /^65-74/ },
-        { min: 55, label: /^55-64/ },
-        { min: 0, label: /^<\s*54/ }
+        { min: 95, label: /^95-100/, score: 5 },
+        { min: 85, label: /^85-94/, score: 4 },
+        { min: 75, label: /^75-84/, score: 3 },
+        { min: 65, label: /^65-74/, score: 2 },
+        { min: 55, label: /^55-64/, score: 1 },
+        { min: 0, label: /^<\s*54/, score: 0 }
     ];
 
     function getBand(percentage) {
