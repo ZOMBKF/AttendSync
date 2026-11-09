@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Compass Attendance Test</title>
+    <style>
+        body {
+            margin: 0;
+            font-family: Arial, sans-serif;
+            background: #f2f4f7;
+            color: #333;
+        }
+
+        header {
+            background: #263d59;
+            color: white;
+            padding: 18px 30px;
+            font-size: 20px;
+            font-weight: bold;
+        }
+
+        main {
+            margin: 30px;
+            background: white;
+            padding: 25px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+
+        h2 {
+            margin-top: 0;
+            font-size: 20px;
+        }
+
+        .description {
+            color: #666;
+            font-size: 13px;
+        }
+
+        .table-wrapper {
+            overflow-x: auto;
+            margin-top: 20px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 12px;
+            white-space: nowrap;
+        }
+
+        th,
+        td {
+            border: 1px solid #ddd;
+            padding: 10px 8px;
+            text-align: center;
+        }
+
+        th {
+            background: #e6e9ed;
+            font-weight: bold;
+        }
+
+        tr:nth-child(even) {
+            background: #fafafa;
+        }
+
+        td:first-child {
+            text-align: left;
+        }
+
+        .as_valGreen,
+        .as_valGreen_Total {
+            background: #d8f0d8;
+        }
+
+        .as_valYellow {
+            background: #fff2c2;
+        }
+
+        .as_valOrange,
+        .as_valOrange_Total,
+        .as_orange {
+            background: #ffe0c2;
+        }
+
+        .as_valBlue,
+        .as_valBlue2 {
+            background: #dceaff;
+        }
+
+        .as_valRed {
+            background: #ffd6d6;
+        }
+
+        .as_valGrey {
+            background: #f0f0f0;
+        }
+
+        .note {
+            margin-top: 20px;
+            padding: 12px;
+            background: #eef6ff;
+            border-left: 4px solid #3976c8;
+            font-size: 13px;
+        }
+    </style>
+</head>
+
+<body>
+
+    <header>Compass — Attendance Summary (Test)</header>
+
+    <main>
+        <h2>Student Attendance Summary</h2>
+        <p class="description">
+            Local testing page using fictional students.
+            This is not connected to Compass.
+        </p>
+
+        <div class="table-wrapper">
+            <table id="attendanceTable">
+                <thead>
+                    <tr class="header">
+                        <th class="as_otherHead">Student</th>
+                        <th class="as_otherHead">ID Code</th>
+                        <th class="as_otherHead">Form</th>
+                        <th class="as_otherHead">Run</th>
+                        <th class="as_green2">Prsnt</th>
+                        <th class="as_yellow2">Late Appr</th>
+                        <th class="as_yellow2">Late Un'd</th>
+                        <th class="as_green2">Total</th>
+                        <th class="as_orange2">Counted</th>
+                        <th class="as_blue2">Non-Counted</th>
+                        <th class="as_red2">NP Un'd</th>
+                        <th class="as_orange2">Total</th>
+                        <th class="as_otherHead">Class %</th>
+                        <th class="as_otherHead">Ac'td %</th>
+                        <th class="as_otherHead">VCE %</th>
+                        <th class="as_otherHead">Schl %</th>
+                    </tr>
+                </thead>
+                <tbody id="studentRows"></tbody>
+            </table>
+        </div>
+
+        <div class="note">
+            <strong>Test instructions:</strong>
+            Open AttendSync and click Extract Attendance.
+            The extension should extract 10 fictional students.
+        </div>
+    </main>
+
+    <script>
+        const students = [
+            ["ABC0001", "Student A", 98],
+            ["DEF0002", "Student B", 91],
+            ["GHI0003", "Student C", 78],
+            ["JKL0004", "Student D", 69],
+            ["MNO0005", "Student E", 57],
+            ["PQR0006", "Student F", 43],
+            ["STU0007", "Student G", 95],
+            ["VWX0008", "Student H", 85],
+            ["YZA0009", "Student I", 55],
+            ["BCD0010", "Student J", 54]
+        ];
+
+        const tbody = document.getElementById("studentRows");
+
+        for (const [id, name, attendance] of students) {
+            const row = document.createElement("tr");
+
+            const values = [
+                `${name} (${id})`,
+                id,
+                "12A",
+                123,
+                90,
+                0,
+                4,
+                94,
+                29,
+                0,
+                0,
+                29,
+                attendance,
+                100,
+                attendance,
+                attendance
+            ];
+
+            values.forEach((value, index) => {
+                const cell = document.createElement("td");
+                cell.textContent = value;
+
+                if (index === 0 || index === 1 || index === 2) {
+                    cell.className = "as_valGrey";
+                } else if (index === 4 || index === 7) {
+                    cell.className = "as_valGreen";
+                } else if (index === 5 || index === 6) {
+                    cell.className = "as_valYellow";
+                } else if (index === 12 || index === 14 || index === 15) {
+                    cell.className = "as_orange";
+                }
+
+                row.appendChild(cell);
+            });
+
+            tbody.appendChild(row);
+        }
+    </script>
+</body>
+
+</html>

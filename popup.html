@@ -10,50 +10,98 @@
             width: 300px;
             padding: 20px;
             font-family: Arial, sans-serif;
-            background: #f8fafc;
+            background-color: #f8fafc;
             color: #0f172a;
-        }
-
-        h1 {
-            font-size: 22px;
-            margin-bottom: 5px;
-        }
-
-        p {
-            color: #64748b;
         }
 
         button {
             display: block;
             width: 100%;
             padding: 12px;
-            margin-top: 12px;
+            margin-top: 10px;
+            background-color: #2563eb;
+            color: white;
             border: none;
             border-radius: 8px;
-            background: #2563eb;
+            cursor: pointer;
+            box-sizing: border-box;
+        }
+
+        #status {
+            margin-top: 15px;
+            font-size: 13px;
+        }
+
+
+        #preview[hidden] {
+            display: none;
+        }
+
+        #previewTable {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 12px;
+        }
+
+        #previewTable th,
+        #previewTable td {
+            padding: 8px 4px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+
+        #cancelFill {
+            background-color: #64748b;
+        }
+
+        #clearData {
+            background-color: #64748b;
+        }
+
+        #clearData:hover {
+            background-color: #475569;
+        }
+
+        #clearData {
+            background-color: #2563eb;
             color: white;
             cursor: pointer;
         }
 
-        button:hover {
-            background: #1d4ed8;
+        #clearData:hover:not(:disabled) {
+            background-color: #1d4ed8;
         }
 
-        #status {
-            font-size: 13px;
-            margin-top: 15px;
+        #clearData:disabled {
+            background-color: #9ca3af;
+            color: #e5e7eb;
+            cursor: not-allowed;
+            opacity: 1;
         }
     </style>
 </head>
 
 <body>
-    <h1>AttendSync</h1>
+    <h2>AttendSync</h2>
     <p>Smart Attendance Automation</p>
 
     <button id="extract">Extract Attendance</button>
     <button id="fill">Fill GPA Attendance</button>
+    <button id="clearData">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+            stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-right: 6px;">
+            <path d="M3 6h18" />
+            <path d="M8 6V4h8v2" />
+            <path d="M19 6l-1 14H6L5 6" />
+            <path d="M10 11v5" />
+            <path d="M14 11v5" />
+        </svg>
+        Clear Saved Data
+    </button>
+
 
     <p id="status">Ready to begin.</p>
+
 
     <script src="popup.js"></script>
 </body>
