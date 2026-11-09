@@ -1,42 +1,70 @@
 
-function processGpaAttendance(attendanceMap, applyChanges = false, approvedChanges = []) {
+function processGpaAttendance(
+    attendanceMap,
+    applyChanges = false,
+    approvedChanges = []
+) {
+    // Convert attendance percentages into GPA scores.
     const attendanceBands = [
-        { min: 95, label: /^95-100/, score: 5 },
-        { min: 85, label: /^85-94/, score: 4 },
-        { min: 75, label: /^75-84/, score: 3 },
-        { min: 65, label: /^65-74/, score: 2 },
-        { min: 55, label: /^55-64/, score: 1 },
-        { min: 0, label: /^<\s*54/, score: 0 }
+        { min: 95, score: 5, label: /^95\s*-\s*100$/ },
+        { min: 85, score: 4, label: /^85\s*-\s*94$/ },
+        { min: 75, score: 3, label: /^75\s*-\s*84$/ },
+        { min: 65, score: 2, label: /^65\s*-\s*74$/ },
+        { min: 55, score: 1, label: /^55\s*-\s*64$/ },
+        { min: 0, score: 0, label: /^<\s*(54|55)$/ }
     ];
 
     function getBand(percentage) {
         return attendanceBands.find(
             band => percentage >= band.min
-        )?.label;
+        );
     }
 
+    function normalise(text) {
+        return (text || "")
+            .trim()
+            .toLowerCase()
+            .replace(/\s+/g, "");
+    }
+
+    // Confirm that a dropdown contains attendance bands.
     function isAttendanceSelect(select) {
         const options = [...select.options].map(option =>
-            option.textContent.trim().toLowerCase()
+            normalise(option.textContent)
         );
 
         const expected = [
-            "95-100", "85-94", "75-84",
-            "65-74", "55-64", "<54", "n/a"
+            "95-100",
+            "85-94",
+            "75-84",
+            "65-74",
+            "55-64",
+            "n/a"
         ];
 
-        return expected.every(label =>
-            options.some(option => option.includes(label))
+        const hasExpectedBands = expected.every(label =>
+            options.includes(label)
         );
+
+        const hasLowestBand =
+            options.includes("<54") ||
+            options.includes("<55");
+
+        return hasExpectedBands && hasLowestBand;
     }
 
-    const rows = [...document.querySelectorAll("tr.even, tr.odd")]
-        .filter(row => !row.classList.contains("gpa-fill-down-row"));
+    const rows = [
+        ...document.querySelectorAll("tr.even, tr.odd")
+    ].filter(
+        row => !row.classList.contains("gpa-fill-down-row")
+    );
 
     const changes = [];
     const matches = [];
+    const seenIds = new Set();
     let skipped = 0;
 
+    // Validate student records before making changes.
     for (const row of rows) {
         const nameCell = row.querySelector(".gpa_subject");
 
@@ -50,11 +78,38 @@ function processGpaAttendance(attendanceMap, applyChanges = false, approvedChang
         }
 
         const id = idMatch[1].toUpperCase();
+
+        // Stop if the GPA page contains duplicate student IDs.
+        if (seenIds.has(id)) {
+            return {
+                success: false,
+                message:
+                    `Duplicate student ID on GPA page: ${id}. ` +
+                    "No changes made.",
+                matched: 0,
+                skipped,
+                applied: false,
+                changes: []
+            };
+        }
+
+        seenIds.add(id);
+
+        if (
+            !Object.prototype.hasOwnProperty.call(
+                attendanceMap,
+                id
+            )
+        ) {
+            skipped++;
+            continue;
+        }
+
         const percentage = Number(attendanceMap[id]);
 
         if (
-            attendanceMap[id] === undefined ||
             !Number.isFinite(percentage) ||
+            !Number.isInteger(percentage) ||
             percentage < 0 ||
             percentage > 100
         ) {
@@ -62,10 +117,11 @@ function processGpaAttendance(attendanceMap, applyChanges = false, approvedChang
             continue;
         }
 
-        const selects = [...row.querySelectorAll("td.gpa_normal select")]
-            .filter(isAttendanceSelect);
+        const selects = [
+            ...row.querySelectorAll("td.gpa_normal select")
+        ].filter(isAttendanceSelect);
 
-        // Do not guess if multiple attendance fields exist.
+        // Never guess when multiple fields match.
         if (selects.length !== 1) {
             skipped++;
             continue;
@@ -75,10 +131,12 @@ function processGpaAttendance(attendanceMap, applyChanges = false, approvedChang
         const band = getBand(percentage);
 
         const option = [...select.options].find(item =>
-            band?.test(item.textContent.trim())
+            band.label.test(
+                item.textContent.trim()
+            )
         );
 
-        if (!option) {
+        if (!option || option.disabled || select.disabled) {
             skipped++;
             continue;
         }
@@ -90,29 +148,41 @@ function processGpaAttendance(attendanceMap, applyChanges = false, approvedChang
         };
 
         changes.push(change);
-        matches.push({ select, option, change });
+        matches.push({
+            select,
+            option,
+            change
+        });
     }
 
+    // Apply changes only after validation.
     if (applyChanges) {
-        // Check that every proposed change was approved.
         const approved = new Map(
-            approvedChanges.map(change => [change.id, change])
+            approvedChanges.map(change => [
+                change.id,
+                change
+            ])
         );
 
         const allApproved =
+            approved.size === approvedChanges.length &&
             matches.length === approvedChanges.length &&
             matches.every(({ change }) => {
                 const previous = approved.get(change.id);
 
-                return previous &&
+                return (
+                    previous &&
                     previous.percentage === change.percentage &&
-                    previous.attendanceBand === change.attendanceBand;
+                    previous.attendanceBand ===
+                    change.attendanceBand
+                );
             });
 
         if (!allApproved || matches.length === 0) {
             return {
                 success: false,
-                message: "GPA matches changed. Please preview again.",
+                message:
+                    "GPA matches changed. No changes made.",
                 matched: matches.length,
                 skipped,
                 applied: false,
@@ -120,11 +190,14 @@ function processGpaAttendance(attendanceMap, applyChanges = false, approvedChang
             };
         }
 
-        // Apply only after all checks have passed.
+        // Fill each matching attendance dropdown.
         for (const { select, option } of matches) {
             select.value = option.value;
+
             select.dispatchEvent(
-                new Event("change", { bubbles: true })
+                new Event("change", {
+                    bubbles: true
+                })
             );
         }
     }
@@ -133,7 +206,9 @@ function processGpaAttendance(attendanceMap, applyChanges = false, approvedChang
         success: true,
         matched: changes.length,
         skipped,
-        applied: applyChanges,
+        applied: applyChanges
+            ? matches.length
+            : 0,
         changes
     };
 }
