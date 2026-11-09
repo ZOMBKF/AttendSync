@@ -70,6 +70,13 @@
 
         if (percentage < 0 || percentage > 100) continue;
 
+        if (Object.hasOwn(attendanceMap, id)) {
+            return {
+                success: false,
+                message: `Duplicate student ID found: ${id}. No data saved.`
+            };
+        }
+
         attendanceMap[id] = percentage;
     }
 

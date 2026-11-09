@@ -52,6 +52,31 @@
         #cancelFill {
             background-color: #64748b;
         }
+
+        #clearData {
+            background-color: #64748b;
+        }
+
+        #clearData:hover {
+            background-color: #475569;
+        }
+
+        #clearData {
+            background-color: #2563eb;
+            color: white;
+            cursor: pointer;
+        }
+
+        #clearData:hover:not(:disabled) {
+            background-color: #1d4ed8;
+        }
+
+        #clearData:disabled {
+            background-color: #9ca3af;
+            color: #e5e7eb;
+            cursor: not-allowed;
+            opacity: 1;
+        }
     </style>
 </head>
 
@@ -61,6 +86,18 @@
 
     <button id="extract">Extract Attendance</button>
     <button id="fill">Fill GPA Attendance</button>
+    <button id="clearData">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+            stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-right: 6px;">
+            <path d="M3 6h18" />
+            <path d="M8 6V4h8v2" />
+            <path d="M19 6l-1 14H6L5 6" />
+            <path d="M10 11v5" />
+            <path d="M14 11v5" />
+        </svg>
+        Clear Saved Data
+    </button>
+
 
     <p id="status">Ready to begin.</p>
 
