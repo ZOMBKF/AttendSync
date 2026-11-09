@@ -1,5 +1,5 @@
 
-(() => {
+function processGpaAttendance(attendanceMap, applyChanges = false, approvedChanges = []) {
     const attendanceBands = [
         { min: 95, label: /^95-100/ },
         { min: 85, label: /^85-94/ },
@@ -30,15 +30,12 @@
         );
     }
 
-    const attendanceMap = window.__attendSyncData || {};
-    const applyChanges = window.__attendSyncApply === true;
-
     const rows = [...document.querySelectorAll("tr.even, tr.odd")]
         .filter(row => !row.classList.contains("gpa-fill-down-row"));
 
-    let matched = 0;
-    let skipped = 0;
     const changes = [];
+    const matches = [];
+    let skipped = 0;
 
     for (const row of rows) {
         const nameCell = row.querySelector(".gpa_subject");
@@ -53,22 +50,29 @@
         }
 
         const id = idMatch[1].toUpperCase();
-        const percentage = attendanceMap[id];
+        const percentage = Number(attendanceMap[id]);
 
-        if (percentage === undefined) {
+        if (
+            attendanceMap[id] === undefined ||
+            !Number.isFinite(percentage) ||
+            percentage < 0 ||
+            percentage > 100
+        ) {
             skipped++;
             continue;
         }
 
-        const select = [...row.querySelectorAll("td.gpa_normal select")]
-            .find(isAttendanceSelect);
+        const selects = [...row.querySelectorAll("td.gpa_normal select")]
+            .filter(isAttendanceSelect);
 
-        if (!select) {
+        // Do not guess if multiple attendance fields exist.
+        if (selects.length !== 1) {
             skipped++;
             continue;
         }
 
-        const band = getBand(Number(percentage));
+        const select = selects[0];
+        const band = getBand(percentage);
 
         const option = [...select.options].find(item =>
             band?.test(item.textContent.trim())
@@ -79,27 +83,57 @@
             continue;
         }
 
-        changes.push({
+        const change = {
             id,
             percentage,
             attendanceBand: option.textContent.trim()
-        });
+        };
 
-        if (applyChanges) {
+        changes.push(change);
+        matches.push({ select, option, change });
+    }
+
+    if (applyChanges) {
+        // Check that every proposed change was approved.
+        const approved = new Map(
+            approvedChanges.map(change => [change.id, change])
+        );
+
+        const allApproved =
+            matches.length === approvedChanges.length &&
+            matches.every(({ change }) => {
+                const previous = approved.get(change.id);
+
+                return previous &&
+                    previous.percentage === change.percentage &&
+                    previous.attendanceBand === change.attendanceBand;
+            });
+
+        if (!allApproved || matches.length === 0) {
+            return {
+                success: false,
+                message: "GPA matches changed. Please preview again.",
+                matched: matches.length,
+                skipped,
+                applied: false,
+                changes
+            };
+        }
+
+        // Apply only after all checks have passed.
+        for (const { select, option } of matches) {
             select.value = option.value;
             select.dispatchEvent(
                 new Event("change", { bubbles: true })
             );
         }
-
-        matched++;
     }
 
     return {
         success: true,
-        matched,
+        matched: changes.length,
         skipped,
         applied: applyChanges,
         changes
     };
-})();
+}

@@ -13,12 +13,40 @@ let pendingChanges = [];
 let pendingTabId = null;
 let pendingPageUrl = null;
 
-// ---------------------------------
-// 1. EXTRACT ATTENDANCE
-// ---------------------------------
+function clearPreview() {
+    preview.hidden = true;
+    pendingChanges = [];
+    pendingTabId = null;
+    pendingPageUrl = null;
+    previewBody.replaceChildren();
+}
 
+// Run GPA logic directly with the supplied arguments.
+async function runGpa(tabId, attendanceMap, apply, approved = []) {
+    const results = await chrome.scripting.executeScript({
+        target: { tabId },
+        func: async (data, shouldApply, approvedList) => {
+            // Load GPA function into the same isolated world.
+            // This function is defined in gpa.js.
+            if (typeof processGpaAttendance !== "function") {
+                return {
+                    success: false,
+                    message: "GPA function is not loaded."
+                };
+            }
+
+            return processGpaAttendance(data, shouldApply, approvedList);
+        },
+        args: [attendanceMap, apply, approved]
+    });
+
+    return results[0]?.result;
+}
+
+// Extract attendance
 extractButton.addEventListener("click", async () => {
     try {
+        clearPreview();
         statusEl.textContent = "Extracting attendance...";
 
         const [tab] = await chrome.tabs.query({
@@ -37,25 +65,16 @@ extractButton.addEventListener("click", async () => {
 
         const result = results[0]?.result;
 
-        if (!result?.success) {
+        if (!result?.success || !result.count) {
             throw new Error(
-                result?.message || "Attendance extraction failed."
+                result?.message || "No attendance records found."
             );
-        }
-
-        if (!result.attendanceMap || !result.count) {
-            throw new Error("No attendance records found.");
         }
 
         await chrome.storage.local.set({
             attendanceMap: result.attendanceMap,
             attendanceSavedAt: Date.now()
         });
-
-        preview.hidden = true;
-        pendingChanges = [];
-        pendingTabId = null;
-        pendingPageUrl = null;
 
         statusEl.textContent =
             `Successfully extracted ${result.count} students!`;
@@ -66,17 +85,10 @@ extractButton.addEventListener("click", async () => {
     }
 });
 
-// ---------------------------------
-// 2. PREVIEW GPA ATTENDANCE
-// ---------------------------------
-
+// Preview GPA changes
 fillButton.addEventListener("click", async () => {
     try {
-        preview.hidden = true;
-        pendingChanges = [];
-        pendingTabId = null;
-        pendingPageUrl = null;
-
+        clearPreview();
         statusEl.textContent = "Checking GPA attendance...";
 
         const { attendanceMap, attendanceSavedAt } =
@@ -86,17 +98,14 @@ fillButton.addEventListener("click", async () => {
             ]);
 
         if (!attendanceMap || !Object.keys(attendanceMap).length) {
-            throw new Error("Please extract attendance first.");
+            throw new Error("Extract attendance first.");
         }
 
-        // Warn if data is older than 24 hours.
         if (
             !attendanceSavedAt ||
             Date.now() - attendanceSavedAt > 24 * 60 * 60 * 1000
         ) {
-            throw new Error(
-                "Attendance data is old. Please extract it again."
-            );
+            throw new Error("Attendance data is old. Extract it again.");
         }
 
         const [tab] = await chrome.tabs.query({
@@ -108,46 +117,36 @@ fillButton.addEventListener("click", async () => {
             throw new Error("No valid GPA tab found.");
         }
 
-        // Pass saved attendance data to the GPA page.
+        // Load the GPA function.
         await chrome.scripting.executeScript({
-            target: { tabId: tab.id },
-            func: (data) => {
-                window.__attendSyncData = data;
-                window.__attendSyncApply = false;
-            },
-            args: [attendanceMap]
-        });
-
-        // Run GPA script in preview mode.
-        const results = await chrome.scripting.executeScript({
             target: { tabId: tab.id },
             files: ["gpa.js"]
         });
 
-        const result = results[0]?.result;
+        const result = await runGpa(
+            tab.id,
+            attendanceMap,
+            false
+        );
 
         if (!result?.success || !result.matched) {
-            throw new Error("No matching GPA attendance fields found.");
+            throw new Error(
+                result?.message || "No matching GPA fields found."
+            );
         }
 
         pendingChanges = result.changes;
         pendingTabId = tab.id;
         pendingPageUrl = tab.url;
 
-        // Clear old preview rows.
-        previewBody.replaceChildren();
-
-        // Add students to the preview table.
         for (const change of pendingChanges) {
             const row = document.createElement("tr");
 
-            const values = [
+            for (const value of [
                 change.id,
                 `${change.percentage}%`,
                 change.attendanceBand
-            ];
-
-            for (const value of values) {
+            ]) {
                 const cell = document.createElement("td");
                 cell.textContent = value;
                 row.appendChild(cell);
@@ -160,9 +159,7 @@ fillButton.addEventListener("click", async () => {
             `${result.matched} matched, ${result.skipped} skipped.`;
 
         preview.hidden = false;
-
-        statusEl.textContent =
-            "Review the attendance values before filling.";
+        statusEl.textContent = "Review changes before filling.";
 
     } catch (error) {
         statusEl.textContent = `Error: ${error.message}`;
@@ -170,10 +167,7 @@ fillButton.addEventListener("click", async () => {
     }
 });
 
-// ---------------------------------
-// 3. CONFIRM AND FILL
-// ---------------------------------
-
+// Confirm and apply
 confirmFill.addEventListener("click", async () => {
     try {
         if (!pendingTabId || !pendingChanges.length) {
@@ -181,17 +175,12 @@ confirmFill.addEventListener("click", async () => {
         }
 
         confirmFill.disabled = true;
-        fillButton.disabled = true;
-
         statusEl.textContent = "Filling GPA attendance...";
 
-        // Check that the user has not changed pages.
         const tab = await chrome.tabs.get(pendingTabId);
 
         if (tab.url !== pendingPageUrl) {
-            throw new Error(
-                "The GPA page has changed. Please preview again."
-            );
+            throw new Error("Page changed. Preview again.");
         }
 
         const attendanceMap = Object.fromEntries(
@@ -201,55 +190,41 @@ confirmFill.addEventListener("click", async () => {
             ])
         );
 
-        // Enable apply mode.
+        // Load GPA function again.
         await chrome.scripting.executeScript({
-            target: { tabId: pendingTabId },
-            func: (data) => {
-                window.__attendSyncData = data;
-                window.__attendSyncApply = true;
-            },
-            args: [attendanceMap]
-        });
-
-        // Apply GPA dropdown changes.
-        const results = await chrome.scripting.executeScript({
             target: { tabId: pendingTabId },
             files: ["gpa.js"]
         });
 
-        const result = results[0]?.result;
+        const result = await runGpa(
+            pendingTabId,
+            attendanceMap,
+            true,
+            pendingChanges
+        );
 
-        if (!result?.success) {
-            throw new Error("Unable to fill GPA attendance.");
+        if (!result?.success || !result.applied) {
+            throw new Error(
+                result?.message || "Unable to apply GPA changes."
+            );
         }
 
         statusEl.textContent =
             `Successfully filled ${result.matched} students!`;
 
-        preview.hidden = true;
-        pendingChanges = [];
-        pendingTabId = null;
-        pendingPageUrl = null;
+        clearPreview();
 
     } catch (error) {
+        clearPreview();
         statusEl.textContent = `Error: ${error.message}`;
         console.error(error);
     } finally {
         confirmFill.disabled = false;
-        fillButton.disabled = false;
     }
 });
 
-// ---------------------------------
-// 4. CANCEL
-// ---------------------------------
-
+// Cancel
 cancelFill.addEventListener("click", () => {
-    preview.hidden = true;
-
-    pendingChanges = [];
-    pendingTabId = null;
-    pendingPageUrl = null;
-
+    clearPreview();
     statusEl.textContent = "Changes cancelled.";
 });
